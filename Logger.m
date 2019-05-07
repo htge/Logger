@@ -6,7 +6,8 @@
 //
 
 #import "Logger.h"
-#import <CommonCrypto/CommonCrypto.h>
+#import "NSData+AES.h"
+#import "NSData+Zlib.h"
 
 //64kb
 #define MAX_CACHE_SIZE  65536
@@ -14,8 +15,10 @@
 @interface Logger()
 
 @property (assign, nonatomic) NSString *logHeader;
-@property (assign, nonatomic) NSInteger cacheSize;
 @property (strong, nonatomic) NSData *iv;
+@property (assign, nonatomic) z_stream zStream;
+@property (assign, nonatomic) BOOL useZip;
+@property (assign, nonatomic) NSInteger cacheSize;
 @property (assign, nonatomic) LoggerLevel level;
 @property (assign, nonatomic) LoggerLevel fileLevel;
 @property (strong, nonatomic) NSFileHandle *fileHandle;
@@ -35,12 +38,15 @@
         logger = [[Logger alloc] init];
         logger.fileCache = [NSMutableData data];
         logger.fileLock = [[NSLock alloc] init];
+        logger.fileLevel = LoggerLevelDebug;
+        logger.level = LoggerLevelError;
         logger.logHeader = @"LOG_HEADER";
         logger.cacheSize = MAX_CACHE_SIZE;
     });
     return logger;
 }
 
+#pragma mark - properties
 + (void)setLogHeader:(NSString *)logHeader {
     NSAssert(logHeader != nil, @"logHeader could not be null");
     [self getInstance].logHeader = logHeader;
@@ -51,10 +57,6 @@
     [self getInstance].cacheSize = cacheSize;
 }
 
-+ (void)setIV:(NSData *)data {
-    [self getInstance].iv = data;
-}
-
 + (void)setLogLevel:(LoggerLevel)level {
     [self getInstance].level = level;
 }
@@ -63,12 +65,12 @@
     [self getInstance].fileLevel = level;
 }
 
-+ (void)initFilePath:(NSString *)path secretKey:(NSString *)secretKey {
+#pragma mark -
++ (void)initFilePath:(NSString *)path secretKey:(NSString *)secretKey iv:(NSData *)iv useZip:(BOOL)useZip {
     BOOL isDirectory;
     if (![[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory]) {
         [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
-    }
-    if (isDirectory) {
+    } else if (isDirectory) {
         NSString *message = [NSString stringWithFormat:@"Is directory: \"%@\"", path];
         @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
     }
@@ -80,8 +82,22 @@
     [handle seekToEndOfFile];
     [handle writeData:[[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding]];
     
-    [self getInstance].fileHandle = handle;
-    [self getInstance].fileSecretKey = secretKey;
+    //设置全局配置，当调用日志函数时会用得到
+    Logger *logger = [self getInstance];
+    logger.fileHandle = handle;
+    logger.fileSecretKey = secretKey;
+    logger.iv = iv;
+    
+    if (useZip) {
+        int windowBits = 15;
+        int GZIP_ENCODING = 16;
+        if (deflateInit2(&logger->_zStream, Z_BEST_SPEED, Z_DEFLATED, windowBits | GZIP_ENCODING,
+                         8, Z_DEFAULT_STRATEGY) < 0) {
+            NSString *message = @"Could not init zlib";
+            @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
+        }
+        logger.useZip = YES;
+    }
     
     if (secretKey.length > 0) {
         CCCryptorRef cryptor;
@@ -91,52 +107,10 @@
         //建立句柄，用来动态追加，最后调用endLogFile销毁
         if (kCCSuccess == CCCryptorCreate(kCCEncrypt, kCCAlgorithmAES128,
                                           kCCOptionPKCS7Padding, keyPtr, kCCKeySizeAES256,
-                                          [self getInstance].iv.bytes, &cryptor)) {
+                                          iv.bytes, &cryptor)) {
             [self getInstance].fileCryptor = cryptor;
         }
     }
-}
-
-+ (NSData *)aes256Encrypt:(NSString *)string {
-    NSString *key = [self getInstance].fileSecretKey;
-    NSData *data = [string dataUsingEncoding:NSUTF8StringEncoding];
-    NSUInteger dataLength = data.length;
-    char keyPtr[kCCKeySizeAES256 + 1] = {0};
-    [key getCString:keyPtr maxLength:sizeof(keyPtr) encoding:NSUTF8StringEncoding];
-    
-    //堆缓存建立，足够的长度即可
-    size_t bufferSize = dataLength + kCCBlockSizeAES128;
-    void *buffer = malloc(bufferSize);
-    size_t numBytesEncrypted = 0;
-    if (kCCSuccess == CCCryptorUpdate([self getInstance].fileCryptor,
-                                      [data bytes], dataLength, buffer, bufferSize, &numBytesEncrypted)) {
-        return [NSMutableData dataWithBytesNoCopy:buffer length:numBytesEncrypted];
-    }
-    
-    free(buffer);
-    return nil;
-}
-
-+ (NSData*)aes256Decrypt:(NSData*)data password:(NSString *)password {
-    char keyPtr[kCCKeySizeAES256 + 1] = {0};
-
-    [password getCString:keyPtr maxLength:sizeof(keyPtr) encoding:NSUTF8StringEncoding];
-    NSUInteger dataLength = [data length];
-    
-    size_t bufferSize = dataLength + kCCBlockSizeAES128;
-    void* buffer = malloc(bufferSize);
-    
-    size_t numBytesDecrypted = 0;
-    CCCryptorStatus cryptStatus = CCCrypt(kCCDecrypt, kCCAlgorithmAES128, kCCOptionPKCS7Padding,
-                                          keyPtr, kCCKeySizeAES256, [self getInstance].iv.bytes,
-                                          [data bytes], dataLength, buffer, bufferSize, &numBytesDecrypted);
-    
-    if (cryptStatus == kCCSuccess) {
-        return [NSMutableData dataWithBytesNoCopy:buffer length:numBytesDecrypted];
-    }
-    
-    free(buffer);
-    return nil;
 }
 
 + (void)outputToFile:(NSMutableString *)string {
@@ -147,10 +121,15 @@
     [string insertString:dateStr atIndex:0];
     [string appendString:@"\n"];
     NSData *data = nil;
-    if ([self getInstance].fileSecretKey.length > 0) {
-        data = [self aes256Encrypt:string];
-    } else {
-        data = [string dataUsingEncoding:NSUTF8StringEncoding];
+    Logger *logger = [self getInstance];
+    data = [string dataUsingEncoding:NSUTF8StringEncoding];
+    
+    //先压缩后加密
+    if (logger.useZip) {
+        data = [data deflateWithStream:&logger->_zStream chunk:8192];
+    }
+    if (logger.fileSecretKey.length > 0) {
+        data = [data updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv];
     }
     
     //用队列写
@@ -166,6 +145,7 @@
     [[self getInstance].fileLock unlock];
 }
 
+#pragma mark -
 + (void)info:(NSString *)format, ... {
     NSAssert(format != nil, @"format could not be null");
     
@@ -190,7 +170,7 @@
 
 + (void)debug:(NSString *)format, ... {
     NSAssert(format != nil, @"format could not be null");
-
+    
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelDebug;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelDebug && [self getInstance].fileHandle != nil;
     if (isOutputToConsole || isOutputToFile) {
@@ -211,7 +191,7 @@
 
 + (void)error:(NSString *)format, ... {
     NSAssert(format != nil, @"format could not be null");
-
+    
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelError;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelError && [self getInstance].fileHandle != nil;
     
@@ -231,7 +211,13 @@
     }
 }
 
+#pragma mark -
 + (void)endLogFile {
+    Logger *logger = [self getInstance];
+    if (logger.useZip) {
+        deflateEnd(&logger->_zStream);
+        logger.useZip = NO;
+    }
     CCCryptorRef cryptor = [self getInstance].fileCryptor;
     if (cryptor) {
         NSFileHandle *handle = [self getInstance].fileHandle;
@@ -240,11 +226,13 @@
             size_t dataOutMoved = 0;
             if (kCCSuccess == CCCryptorFinal(cryptor, buffer, sizeof(buffer), &dataOutMoved)) {
                 __block NSData *data = [NSData dataWithBytes:buffer length:dataOutMoved];
-
+                
                 [[self getInstance].fileLock lock];
                 NSMutableData *fileCache = [self getInstance].fileCache;
                 [fileCache appendData:data];
                 [handle writeData:fileCache];
+                [handle closeFile];
+                [self getInstance].fileHandle = nil;
                 
                 //最后写肯定得清缓存
                 [self getInstance].fileCache = [NSMutableData data];
@@ -255,50 +243,53 @@
     }
 }
 
-+ (NSString *)decrypt:(NSString *)path password:(NSString *)password {
-    NSAssert(path != nil, @"path could not be null");
-    NSAssert(password != nil, @"password could not be null");
-
-    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
-    NSMutableString *mStr = [NSMutableString stringWithString:@""];
-    if (handle) {
-        [handle seekToFileOffset:0];
-        NSData *allData = [handle readDataToEndOfFile];
-        NSInteger dataBegin = -1;
-        NSData *headData = [[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding];
-        while (true) {
-            NSInteger searchBegin = dataBegin+1;
-            NSRange searchRange = NSMakeRange(searchBegin, allData.length-searchBegin);
-            NSRange headerRange = [allData rangeOfData:headData options:0 range:searchRange];
-            if (headerRange.length != headData.length) {
-                NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, allData.length-dataBegin-1)];
-                [mStr appendFormat:@"%@ START\n", [self getInstance].logHeader];
-                [mStr appendString:[self decryptData:data password:password]];
-                [mStr appendFormat:@"%@ END\n", [self getInstance].logHeader];
-                break;
-            }
-            if (dataBegin != -1) {
-                NSInteger dataEnd = (NSInteger)headerRange.location;
-                NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, dataEnd-dataBegin-1)];
-                [mStr appendFormat:@"%@ START\n", [self getInstance].logHeader];
-                [mStr appendString:[self decryptData:data password:password]];
-                [mStr appendFormat:@"%@ END\n", [self getInstance].logHeader];
-            }
-            dataBegin = (NSInteger)(headerRange.location+headerRange.length-1);
-        }
-    }
-    return mStr;
-}
-
-+ (NSString *)decryptData:(NSData *)data password:(NSString *)password {
+#pragma mark -
++ (NSString *)decryptData:(NSData *)data password:(NSString *)password iv:(NSData *)iv useZip:(BOOL)useZip {
     NSString *str = @"";
     if (data.length > 0) {
-        NSData *decData = [self aes256Decrypt:data password:password];
+        NSData *decData = [data decrypt256:password iv:iv];
         if (decData) {
+            if (useZip) {
+                decData = [decData inflate];
+            }
             str = [[NSString alloc] initWithData:decData encoding:NSUTF8StringEncoding];
+            if (str == nil) {
+                NSLog(@"decryptData无法处理错误的字符串，退出");
+                return @"";
+            }
         }
     }
     return str;
+}
+
++ (NSArray <NSString *>*)decryptFromData:(NSData *)allData password:(NSString *)password
+                                      iv:(NSData *)iv useZip:(BOOL)useZip {
+    NSMutableArray <NSString *>*results = [NSMutableArray array];
+    NSInteger dataBegin = -1;
+    NSData *headData = [[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding];
+    while (true) {
+        NSInteger searchBegin = dataBegin+1;
+        NSRange searchRange = NSMakeRange(searchBegin, allData.length-searchBegin);
+        NSRange headerRange = [allData rangeOfData:headData options:0 range:searchRange];
+        if (headerRange.length != headData.length) {
+            NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, allData.length-dataBegin-1)];
+            NSString *result = [self decryptData:data password:password iv:iv useZip:useZip];
+            if (result && result.length > 0) {
+                [results addObject:result];
+            }
+            break;
+        }
+        if (dataBegin != -1) {
+            NSInteger dataEnd = (NSInteger)headerRange.location;
+            NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, dataEnd-dataBegin-1)];
+            NSString *result = [self decryptData:data password:password iv:iv useZip:useZip];
+            if (result && result.length > 0) {
+                [results addObject:result];
+            }
+        }
+        dataBegin = (NSInteger)(headerRange.location+headerRange.length-1);
+    }
+    return results;
 }
 
 @end

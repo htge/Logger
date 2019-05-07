@@ -24,15 +24,14 @@ typedef NS_ENUM(NSInteger, LoggerLevel) {
 //输出文件缓存，默认64KB
 + (void)setMaxCacheSize:(NSInteger)cacheSize;
 
-//设置加密向量，默认nil
-+ (void)setIV:(NSData *)data;
-
-//控制台，默认None
+//控制台的日志分级，默认Error，只输出错误日志
 + (void)setLogLevel:(LoggerLevel)level;
 
-//输出文件，默认不输出
+//文件的日志分级，默认Debug：所有日志都输出
 + (void)setFileLogLevel:(LoggerLevel)level;
-+ (void)initFilePath:(NSString *)path secretKey:(NSString *)secretKey;
+
+//初始化文件之前，先设置好参数再初始化
++ (void)initFilePath:(NSString *)path secretKey:(NSString *)secretKey iv:(NSData *)iv useZip:(BOOL)useZip;
 
 + (void)info:(NSString *)format, ...;
 + (void)debug:(NSString *)format, ...;
@@ -42,7 +41,8 @@ typedef NS_ENUM(NSInteger, LoggerLevel) {
 + (void)endLogFile;
 
 //解密
-+ (NSString *)decrypt:(NSString *)path password:(NSString *)password ;
++ (NSArray <NSString *>*)decryptFromData:(NSData *)data password:(NSString *)password
+                                      iv:(NSData *)iv useZip:(BOOL)useZip;
 
 @end
 
