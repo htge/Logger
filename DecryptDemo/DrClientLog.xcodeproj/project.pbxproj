@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8609460322857A90008375D7 /* LoggerCrashReporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 8609460222857A90008375D7 /* LoggerCrashReporter.m */; };
 		860AEFB82282807100EC511B /* PrefWindowController.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFB62282807100EC511B /* PrefWindowController.m */; };
 		860AEFB92282807100EC511B /* PrefWindowController.xib in Resources */ = {isa = PBXBuildFile; fileRef = 860AEFB72282807100EC511B /* PrefWindowController.xib */; };
 		860AEFBC2282822B00EC511B /* Pref.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFBA2282822B00EC511B /* Pref.xcdatamodeld */; };
@@ -14,6 +15,7 @@
 		860AEFD92282C22500EC511B /* Pref+CoreDataClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFD72282C22500EC511B /* Pref+CoreDataClass.m */; };
 		860AEFDA2282C22500EC511B /* Pref+CoreDataProperties.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFD82282C22500EC511B /* Pref+CoreDataProperties.m */; };
 		860AEFDD2282C6D700EC511B /* CommonDataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFDC2282C6D700EC511B /* CommonDataManager.m */; };
+		8663FDCC228565C30019EC40 /* libCrashReporter-MacOSX-Static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8663FDCB228565C30019EC40 /* libCrashReporter-MacOSX-Static.a */; };
 		86B5FD16228131E000578725 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 86B5FD15228131E000578725 /* AppDelegate.m */; };
 		86B5FD19228131E000578725 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86B5FD18228131E000578725 /* ViewController.m */; };
 		86B5FD1C228131E000578725 /* Document.m in Sources */ = {isa = PBXBuildFile; fileRef = 86B5FD1B228131E000578725 /* Document.m */; };
@@ -26,6 +28,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		8609460122857A90008375D7 /* LoggerCrashReporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LoggerCrashReporter.h; sourceTree = "<group>"; };
+		8609460222857A90008375D7 /* LoggerCrashReporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LoggerCrashReporter.m; sourceTree = "<group>"; };
 		860AEFB52282807100EC511B /* PrefWindowController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PrefWindowController.h; sourceTree = "<group>"; };
 		860AEFB62282807100EC511B /* PrefWindowController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = PrefWindowController.m; sourceTree = "<group>"; };
 		860AEFB72282807100EC511B /* PrefWindowController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = PrefWindowController.xib; sourceTree = "<group>"; };
@@ -38,6 +42,28 @@
 		860AEFD82282C22500EC511B /* Pref+CoreDataProperties.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "Pref+CoreDataProperties.m"; sourceTree = "<group>"; };
 		860AEFDB2282C6D700EC511B /* CommonDataManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CommonDataManager.h; sourceTree = "<group>"; };
 		860AEFDC2282C6D700EC511B /* CommonDataManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CommonDataManager.m; sourceTree = "<group>"; };
+		8663FDB0228565B60019EC40 /* PLCrashNamespace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashNamespace.h; sourceTree = "<group>"; };
+		8663FDB1228565B60019EC40 /* PLCrashFeatureConfig.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashFeatureConfig.h; sourceTree = "<group>"; };
+		8663FDB2228565B60019EC40 /* PLCrashReporter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReporter.h; sourceTree = "<group>"; };
+		8663FDB3228565B60019EC40 /* PLCrashReportRegisterInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportRegisterInfo.h; sourceTree = "<group>"; };
+		8663FDB4228565B60019EC40 /* PLCrashReportBinaryImageInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportBinaryImageInfo.h; sourceTree = "<group>"; };
+		8663FDB5228565B60019EC40 /* PLCrashReport.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReport.h; sourceTree = "<group>"; };
+		8663FDB6228565B60019EC40 /* PLCrashReporterConfig.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReporterConfig.h; sourceTree = "<group>"; };
+		8663FDB7228565B60019EC40 /* PLCrashReportMachExceptionInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportMachExceptionInfo.h; sourceTree = "<group>"; };
+		8663FDB8228565B60019EC40 /* PLCrashReportThreadInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportThreadInfo.h; sourceTree = "<group>"; };
+		8663FDBA228565B60019EC40 /* PLCrashReportStackFrameInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportStackFrameInfo.h; sourceTree = "<group>"; };
+		8663FDBB228565B60019EC40 /* PLCrashReportSystemInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportSystemInfo.h; sourceTree = "<group>"; };
+		8663FDBC228565B60019EC40 /* PLCrashReportExceptionInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportExceptionInfo.h; sourceTree = "<group>"; };
+		8663FDBD228565B60019EC40 /* PLCrashReportProcessorInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportProcessorInfo.h; sourceTree = "<group>"; };
+		8663FDC0228565B60019EC40 /* CrashReporter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CrashReporter.h; sourceTree = "<group>"; };
+		8663FDC1228565B60019EC40 /* PLCrashReportSignalInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportSignalInfo.h; sourceTree = "<group>"; };
+		8663FDC2228565B60019EC40 /* PLCrashReportApplicationInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportApplicationInfo.h; sourceTree = "<group>"; };
+		8663FDC3228565B60019EC40 /* PLCrashReportMachineInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportMachineInfo.h; sourceTree = "<group>"; };
+		8663FDC4228565B60019EC40 /* PLCrashReportTextFormatter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportTextFormatter.h; sourceTree = "<group>"; };
+		8663FDC5228565B60019EC40 /* PLCrashReportFormatter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportFormatter.h; sourceTree = "<group>"; };
+		8663FDC6228565B60019EC40 /* PLCrashReportProcessInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportProcessInfo.h; sourceTree = "<group>"; };
+		8663FDC7228565B60019EC40 /* PLCrashReportSymbolInfo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReportSymbolInfo.h; sourceTree = "<group>"; };
+		8663FDCB228565C30019EC40 /* libCrashReporter-MacOSX-Static.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = "libCrashReporter-MacOSX-Static.a"; sourceTree = "<group>"; };
 		86B5FD11228131E000578725 /* DrClientLog.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DrClientLog.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		86B5FD14228131E000578725 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		86B5FD15228131E000578725 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -63,6 +89,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8663FDCC228565C30019EC40 /* libCrashReporter-MacOSX-Static.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +111,43 @@
 			path = Model;
 			sourceTree = "<group>";
 		};
+		8663FDAF228565B60019EC40 /* PLCrashReporter */ = {
+			isa = PBXGroup;
+			children = (
+				8663FDCA228565C30019EC40 /* lib */,
+				8663FDB0228565B60019EC40 /* PLCrashNamespace.h */,
+				8663FDB1228565B60019EC40 /* PLCrashFeatureConfig.h */,
+				8663FDB2228565B60019EC40 /* PLCrashReporter.h */,
+				8663FDB3228565B60019EC40 /* PLCrashReportRegisterInfo.h */,
+				8663FDB4228565B60019EC40 /* PLCrashReportBinaryImageInfo.h */,
+				8663FDB5228565B60019EC40 /* PLCrashReport.h */,
+				8663FDB6228565B60019EC40 /* PLCrashReporterConfig.h */,
+				8663FDB7228565B60019EC40 /* PLCrashReportMachExceptionInfo.h */,
+				8663FDB8228565B60019EC40 /* PLCrashReportThreadInfo.h */,
+				8663FDBA228565B60019EC40 /* PLCrashReportStackFrameInfo.h */,
+				8663FDBB228565B60019EC40 /* PLCrashReportSystemInfo.h */,
+				8663FDBC228565B60019EC40 /* PLCrashReportExceptionInfo.h */,
+				8663FDBD228565B60019EC40 /* PLCrashReportProcessorInfo.h */,
+				8663FDC0228565B60019EC40 /* CrashReporter.h */,
+				8663FDC1228565B60019EC40 /* PLCrashReportSignalInfo.h */,
+				8663FDC2228565B60019EC40 /* PLCrashReportApplicationInfo.h */,
+				8663FDC3228565B60019EC40 /* PLCrashReportMachineInfo.h */,
+				8663FDC4228565B60019EC40 /* PLCrashReportTextFormatter.h */,
+				8663FDC5228565B60019EC40 /* PLCrashReportFormatter.h */,
+				8663FDC6228565B60019EC40 /* PLCrashReportProcessInfo.h */,
+				8663FDC7228565B60019EC40 /* PLCrashReportSymbolInfo.h */,
+			);
+			path = PLCrashReporter;
+			sourceTree = "<group>";
+		};
+		8663FDCA228565C30019EC40 /* lib */ = {
+			isa = PBXGroup;
+			children = (
+				8663FDCB228565C30019EC40 /* libCrashReporter-MacOSX-Static.a */,
+			);
+			path = lib;
+			sourceTree = "<group>";
+		};
 		86B5FD08228131E000578725 = {
 			isa = PBXGroup;
 			children = (
@@ -103,6 +167,7 @@
 		86B5FD13228131E000578725 /* DrClientLog */ = {
 			isa = PBXGroup;
 			children = (
+				8663FDAF228565B60019EC40 /* PLCrashReporter */,
 				860AEFC3228282C900EC511B /* Model */,
 				86B5FD2D228133FE00578725 /* Logger */,
 				86B5FD14228131E000578725 /* AppDelegate.h */,
@@ -133,6 +198,8 @@
 				86B5FD2E228133FE00578725 /* NSData+AES.h */,
 				86B5FD2F228133FE00578725 /* Logger.m */,
 				86B5FD31228133FE00578725 /* Logger.h */,
+				8609460122857A90008375D7 /* LoggerCrashReporter.h */,
+				8609460222857A90008375D7 /* LoggerCrashReporter.m */,
 			);
 			path = Logger;
 			sourceTree = "<group>";
@@ -218,6 +285,7 @@
 				860AEFD92282C22500EC511B /* Pref+CoreDataClass.m in Sources */,
 				860AEFDA2282C22500EC511B /* Pref+CoreDataProperties.m in Sources */,
 				86B5FD33228133FE00578725 /* NSData+AES.m in Sources */,
+				8609460322857A90008375D7 /* LoggerCrashReporter.m in Sources */,
 				86B5FD24228131E100578725 /* main.m in Sources */,
 				860AEFDD2282C6D700EC511B /* CommonDataManager.m in Sources */,
 				86B5FD3C228170C800578725 /* NSData+Zlib.m in Sources */,
@@ -364,6 +432,10 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/DrClientLog/PLCrashReporter/lib",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.demo.DrClientLog;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -380,6 +452,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/DrClientLog/PLCrashReporter/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.demo.DrClientLog;

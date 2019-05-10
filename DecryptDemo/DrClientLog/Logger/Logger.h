@@ -12,8 +12,9 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, LoggerLevel) {
     LoggerLevelNone = 0,
     LoggerLevelError = 1,
-    LoggerLevelInfo = 2,
-    LoggerLevelDebug = 3,
+    LoggerLevelWarn = 2,
+    LoggerLevelInfo = 3,
+    LoggerLevelDebug = 4,
 };
 
 @interface Logger : NSObject
@@ -35,6 +36,7 @@ typedef NS_ENUM(NSInteger, LoggerLevel) {
 
 + (void)info:(NSString *)format, ...;
 + (void)debug:(NSString *)format, ...;
++ (void)warn:(NSString *)format, ...;
 + (void)error:(NSString *)format, ...;
 
 //流式加密写入需要手动调用结束过程

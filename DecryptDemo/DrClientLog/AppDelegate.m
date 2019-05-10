@@ -8,6 +8,8 @@
 
 #import "AppDelegate.h"
 #import "PrefWindowController.h"
+#import "Logger/Logger.h"
+#import "Logger/LoggerCrashReporter.h"
 
 @interface AppDelegate ()
 
@@ -22,8 +24,9 @@
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
     // Insert code here to initialize your application
+    [Logger setLogLevel:LoggerLevelError];
+    [LoggerCrashReporter initCrashReporter];
 }
-
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
     // Insert code here to tear down your application

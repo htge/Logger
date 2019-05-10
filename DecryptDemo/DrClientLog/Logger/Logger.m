@@ -189,6 +189,28 @@
     }
 }
 
++ (void)warn:(NSString *)format, ... {
+    NSAssert(format != nil, @"format could not be null");
+    
+    BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelWarn;
+    BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelWarn && [self getInstance].fileHandle != nil;
+    
+    if (isOutputToConsole || isOutputToFile) {
+        va_list args;
+        va_start(args, format);
+        NSMutableString *string = [NSMutableString stringWithString:@"WARN: "];
+        [string appendString:[[NSString alloc] initWithFormat:format arguments:args]];
+        va_end(args);
+        
+        if (isOutputToConsole) {
+            NSLog(@"%@", string);
+        }
+        if (isOutputToFile) {
+            [self outputToFile:string];
+        }
+    }
+}
+
 + (void)error:(NSString *)format, ... {
     NSAssert(format != nil, @"format could not be null");
     
