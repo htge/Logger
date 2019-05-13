@@ -32,12 +32,20 @@
     // Alternatively, you could remove this method and override -fileWrapperOfType:error:, -writeToURL:ofType:error:, or -writeToURL:ofType:forSaveOperation:originalContentsURL:error: instead.
     @try {
         Pref *pref = [CommonDataManager defaultManager].pref;
-        NSString *header = pref.header;
         NSString *password = pref.password;
         NSData *iv = pref.iv;
-        BOOL useGzip = pref.gzip;
-        [Logger setLogHeader:header];
-        return [Logger encryptData:self.list password:password iv:iv useZip:useGzip];
+        if (iv.length == 0) {
+            iv = nil;
+        }
+        if (password.length == 0) {
+            password = nil;
+        }
+        LoggerConfig *config = [[LoggerConfig alloc] init];
+        config.header = pref.header;
+        config.password = password;
+        config.iv = iv;
+        config.isGzip = pref.gzip;
+        return [Logger encryptData:self.list config:config];
     } @catch (NSException *e) {
         [Logger error:@"dataOfType: %@", e];
         return nil;
@@ -68,21 +76,22 @@
     // 解密完以后，后续触发列表显示
     // 限制文件长度为100M，数据不是完整的就不处理
     if (data.length > 0 && data.length < 104857600) {
-        Pref *pref = [CommonDataManager defaultManager].pref;
-        NSString *header = pref.header;
-        NSString *password = pref.password;
-        NSData *iv = pref.iv;
-        BOOL useGzip = pref.gzip;
-        if (iv.length == 0) {
-            iv = nil;
-        }
-        if (password.length == 0) {
-            password = nil;
-        }
-        [Logger setLogHeader:header];
         @try {
-            self.list = [Logger decryptFromData:data password:password
-                                             iv:iv useZip:useGzip];
+            Pref *pref = [CommonDataManager defaultManager].pref;
+            NSString *password = pref.password;
+            NSData *iv = pref.iv;
+            if (iv.length == 0) {
+                iv = nil;
+            }
+            if (password.length == 0) {
+                password = nil;
+            }
+            LoggerConfig *config = [[LoggerConfig alloc] init];
+            config.header = pref.header;
+            config.password = password;
+            config.iv = iv;
+            config.isGzip = pref.gzip;
+            self.list = [Logger decryptFromData:data config:config];
             NSLog(@"data updated: count=%d", (int)self.list.count);
         } @catch (NSException *e) {
             [Logger error:@"updateDataWithData: %@", e];

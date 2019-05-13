@@ -9,9 +9,6 @@
 #import "NSData+AES.h"
 #import "NSData+Zlib.h"
 
-//64kb
-#define MAX_CACHE_SIZE  65536
-
 @interface Logger()
 
 @property (assign, nonatomic) NSString *logHeader;
@@ -38,20 +35,12 @@
         logger = [[Logger alloc] init];
         logger.fileCache = [NSMutableData data];
         logger.fileLock = [[NSLock alloc] init];
-        logger.fileLevel = LoggerLevelDebug;
         logger.level = LoggerLevelError;
-        logger.logHeader = @"LOG_HEADER";
-        logger.cacheSize = MAX_CACHE_SIZE;
     });
     return logger;
 }
 
 #pragma mark - properties
-+ (void)setLogHeader:(NSString *)logHeader {
-    NSAssert(logHeader != nil, @"logHeader could not be null");
-    [self getInstance].logHeader = logHeader;
-}
-
 + (void)setMaxCacheSize:(NSInteger)cacheSize {
     NSAssert(cacheSize > 0 && cacheSize < 131072, @"Cache size out of range");
     [self getInstance].cacheSize = cacheSize;
@@ -61,12 +50,12 @@
     [self getInstance].level = level;
 }
 
-+ (void)setFileLogLevel:(LoggerLevel)level {
-    [self getInstance].fileLevel = level;
-}
-
 #pragma mark -
-+ (void)initFilePath:(NSString *)path secretKey:(NSString *)secretKey iv:(NSData *)iv useZip:(BOOL)useZip {
++ (void)initFilePath:(NSString *)path config:(LoggerConfig *)config {
+    NSAssert(path != nil, @"path could not be null");
+    NSAssert(config.header != nil, @"header could not be null");
+    NSAssert(config.cacheSize > 0 && config.cacheSize < 131072, @"Cache size out of range");
+    
     BOOL isDirectory;
     if (![[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory]) {
         [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
@@ -84,11 +73,15 @@
     
     //设置全局配置，当调用日志函数时会用得到
     Logger *logger = [self getInstance];
+    NSAssert(logger != nil, @"logger could not be null");
+    logger.fileLevel = config.logLevel;
+    logger.logHeader = config.header;
     logger.fileHandle = handle;
-    logger.fileSecretKey = secretKey;
-    logger.iv = iv;
+    logger.fileSecretKey = config.password;
+    logger.cacheSize = config.cacheSize;
+    logger.iv = config.iv;
     
-    if (useZip) {
+    if (config.isGzip) {
         if (deflateInit2(&logger->_zStream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS | GZIP_ENCODING,
                          8, Z_DEFAULT_STRATEGY) < 0) {
             NSString *message = @"Could not init zlib";
@@ -97,15 +90,15 @@
         logger.useZip = YES;
     }
     
-    if (secretKey.length > 0) {
+    if (config.password.length > 0) {
         CCCryptorRef cryptor;
         char keyPtr[kCCKeySizeAES256 + 1] = {0};
-        [secretKey getCString:keyPtr maxLength:sizeof(keyPtr) encoding:NSUTF8StringEncoding];
+        [config.password getCString:keyPtr maxLength:sizeof(keyPtr) encoding:NSUTF8StringEncoding];
         
         //建立句柄，用来动态追加，最后调用endLogFile销毁
         if (kCCSuccess == CCCryptorCreate(kCCEncrypt, kCCAlgorithmAES128,
                                           kCCOptionPKCS7Padding, keyPtr, kCCKeySizeAES256,
-                                          iv.bytes, &cryptor)) {
+                                          config.iv.bytes, &cryptor)) {
             [self getInstance].fileCryptor = cryptor;
         }
     }
@@ -304,18 +297,20 @@
     return str;
 }
 
-+ (NSArray <NSString *>*)decryptFromData:(NSData *)allData password:(NSString *)password
-                                      iv:(NSData *)iv useZip:(BOOL)useZip {
++ (NSArray <NSString *>*)decryptFromData:(NSData *)allData config:(LoggerConfig *)config {
+    NSAssert(allData != nil, @"allData could not be null");
+    NSAssert(config.header != nil, @"header could not be null");
+
     NSMutableArray <NSString *>*results = [NSMutableArray array];
     NSInteger dataBegin = -1;
-    NSData *headData = [[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *headData = [config.header dataUsingEncoding:NSUTF8StringEncoding];
     while (true) {
         NSInteger searchBegin = dataBegin+1;
         NSRange searchRange = NSMakeRange(searchBegin, allData.length-searchBegin);
         NSRange headerRange = [allData rangeOfData:headData options:0 range:searchRange];
         if (headerRange.length != headData.length) {
             NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, allData.length-dataBegin-1)];
-            NSString *result = [self decryptData:data password:password iv:iv useZip:useZip];
+            NSString *result = [self decryptData:data password:config.password iv:config.iv useZip:config.isGzip];
             if (result && result.length > 0) {
                 [results addObject:result];
             }
@@ -324,7 +319,7 @@
         if (dataBegin != -1) {
             NSInteger dataEnd = (NSInteger)headerRange.location;
             NSData *data = [allData subdataWithRange:NSMakeRange(dataBegin+1, dataEnd-dataBegin-1)];
-            NSString *result = [self decryptData:data password:password iv:iv useZip:useZip];
+            NSString *result = [self decryptData:data password:config.password iv:config.iv useZip:config.isGzip];
             if (result && result.length > 0) {
                 [results addObject:result];
             }
@@ -334,21 +329,23 @@
     return results;
 }
 
-+ (NSData *)encryptData:(NSArray <NSString *>*)allLog password:(NSString *)password
-                     iv:(NSData *)iv useZip:(BOOL)useZip {
-    NSData *headData = [[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding];
++ (NSData *)encryptData:(NSArray <NSString *>*)allLog config:(LoggerConfig *)config {
+    NSAssert(allLog != nil, @"allData could not be null");
+    NSAssert(config.header != nil, @"header could not be null");
+
+    NSData *headData = [config.header dataUsingEncoding:NSUTF8StringEncoding];
     NSMutableData *mData = [NSMutableData data];
     for (NSString *log in allLog) {
         [mData appendData:headData];
         NSData *encData = [log dataUsingEncoding:NSUTF8StringEncoding];
-        if (useZip) {
+        if (config.isGzip) {
             encData = [encData deflate];
             if (encData == nil) {
                 @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:@"encryptData: deflate failed" userInfo:nil];
             }
         }
-        if (password.length > 0) {
-            encData = [encData crypt256:password iv:iv];
+        if (config.password.length > 0) {
+            encData = [encData crypt256:config.password iv:config.iv];
             if (encData == nil) {
                 @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:@"encryptData: crypt256 failed" userInfo:nil];
             }

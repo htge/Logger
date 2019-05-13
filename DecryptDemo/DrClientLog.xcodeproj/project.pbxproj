@@ -15,6 +15,7 @@
 		860AEFD92282C22500EC511B /* Pref+CoreDataClass.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFD72282C22500EC511B /* Pref+CoreDataClass.m */; };
 		860AEFDA2282C22500EC511B /* Pref+CoreDataProperties.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFD82282C22500EC511B /* Pref+CoreDataProperties.m */; };
 		860AEFDD2282C6D700EC511B /* CommonDataManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 860AEFDC2282C6D700EC511B /* CommonDataManager.m */; };
+		8622C4D42288FAB90015EC51 /* LoggerConfig.m in Sources */ = {isa = PBXBuildFile; fileRef = 8622C4D32288FAB90015EC51 /* LoggerConfig.m */; };
 		8663FDCC228565C30019EC40 /* libCrashReporter-MacOSX-Static.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 8663FDCB228565C30019EC40 /* libCrashReporter-MacOSX-Static.a */; };
 		86B5FD16228131E000578725 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 86B5FD15228131E000578725 /* AppDelegate.m */; };
 		86B5FD19228131E000578725 /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86B5FD18228131E000578725 /* ViewController.m */; };
@@ -42,6 +43,8 @@
 		860AEFD82282C22500EC511B /* Pref+CoreDataProperties.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "Pref+CoreDataProperties.m"; sourceTree = "<group>"; };
 		860AEFDB2282C6D700EC511B /* CommonDataManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CommonDataManager.h; sourceTree = "<group>"; };
 		860AEFDC2282C6D700EC511B /* CommonDataManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CommonDataManager.m; sourceTree = "<group>"; };
+		8622C4D22288FAB90015EC51 /* LoggerConfig.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LoggerConfig.h; sourceTree = "<group>"; };
+		8622C4D32288FAB90015EC51 /* LoggerConfig.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = LoggerConfig.m; sourceTree = "<group>"; };
 		8663FDB0228565B60019EC40 /* PLCrashNamespace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashNamespace.h; sourceTree = "<group>"; };
 		8663FDB1228565B60019EC40 /* PLCrashFeatureConfig.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashFeatureConfig.h; sourceTree = "<group>"; };
 		8663FDB2228565B60019EC40 /* PLCrashReporter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PLCrashReporter.h; sourceTree = "<group>"; };
@@ -200,6 +203,8 @@
 				86B5FD31228133FE00578725 /* Logger.h */,
 				8609460122857A90008375D7 /* LoggerCrashReporter.h */,
 				8609460222857A90008375D7 /* LoggerCrashReporter.m */,
+				8622C4D22288FAB90015EC51 /* LoggerConfig.h */,
+				8622C4D32288FAB90015EC51 /* LoggerConfig.m */,
 			);
 			path = Logger;
 			sourceTree = "<group>";
@@ -288,6 +293,7 @@
 				8609460322857A90008375D7 /* LoggerCrashReporter.m in Sources */,
 				86B5FD24228131E100578725 /* main.m in Sources */,
 				860AEFDD2282C6D700EC511B /* CommonDataManager.m in Sources */,
+				8622C4D42288FAB90015EC51 /* LoggerConfig.m in Sources */,
 				86B5FD3C228170C800578725 /* NSData+Zlib.m in Sources */,
 				860AEFCE228284A000EC511B /* CoreDataManager.m in Sources */,
 				86B5FD16228131E000578725 /* AppDelegate.m in Sources */,

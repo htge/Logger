@@ -6,21 +6,11 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "LoggerConfig.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-typedef NS_ENUM(NSInteger, LoggerLevel) {
-    LoggerLevelNone = 0,
-    LoggerLevelError = 1,
-    LoggerLevelWarn = 2,
-    LoggerLevelInfo = 3,
-    LoggerLevelDebug = 4,
-};
-
 @interface Logger : NSObject
-
-//文件头，用于区分加密日志段
-+ (void)setLogHeader:(NSString *)logHeader;
 
 //输出文件缓存，默认64KB
 + (void)setMaxCacheSize:(NSInteger)cacheSize;
@@ -28,11 +18,8 @@ typedef NS_ENUM(NSInteger, LoggerLevel) {
 //控制台的日志分级，默认Error，只输出错误日志
 + (void)setLogLevel:(LoggerLevel)level;
 
-//文件的日志分级，默认Debug：所有日志都输出
-+ (void)setFileLogLevel:(LoggerLevel)level;
-
 //初始化文件之前，先设置好参数再初始化
-+ (void)initFilePath:(NSString *)path secretKey:(NSString *_Nullable)secretKey iv:(NSData *_Nullable)iv useZip:(BOOL)useZip;
++ (void)initFilePath:(NSString *)path config:(LoggerConfig *)config;
 
 + (void)info:(NSString *)format, ...;
 + (void)debug:(NSString *)format, ...;
@@ -43,10 +30,8 @@ typedef NS_ENUM(NSInteger, LoggerLevel) {
 + (void)endLogFile;
 
 //解密
-+ (NSArray <NSString *>*)decryptFromData:(NSData *)data password:(NSString *)password
-                                      iv:(NSData *)iv useZip:(BOOL)useZip;
-+ (NSData *)encryptData:(NSArray <NSString *>*)allLog password:(NSString *)password
-                     iv:(NSData *)iv useZip:(BOOL)useZip;
++ (NSArray <NSString *>*)decryptFromData:(NSData *)data config:(LoggerConfig *)config;
++ (NSData *)encryptData:(NSArray <NSString *>*)allLog config:(LoggerConfig *)config;
 
 @end
 
