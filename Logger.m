@@ -63,13 +63,39 @@
         NSString *message = [NSString stringWithFormat:@"Is directory: \"%@\"", path];
         @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
     }
+    
     NSFileHandle *handle = [NSFileHandle fileHandleForUpdatingAtPath:path];
     if (!handle) {
         NSString *message = [NSString stringWithFormat:@"Could not write to file: \"%@\"", path];
         @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
     }
-    [handle seekToEndOfFile];
-    [handle writeData:[[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    //读取之前的文件，读不出就有可能是写了一半，或者是解压的错误
+    NSData *data = [handle readDataToEndOfFile];
+    NSArray *arr = [self decryptFromData:data config:config];
+    if (data.length > 0 && arr.count == 0) {
+        NSLog(@"could not read the file, recreating...");
+        [handle closeFile];
+        NSString *oldFile = [path stringByAppendingString:@".old"];
+        NSError *error = nil;
+        
+        //移动文件，重新创建一个文件
+        if ([[NSFileManager defaultManager] fileExistsAtPath:oldFile]) {
+            [[NSFileManager defaultManager] removeItemAtPath:oldFile error:&error];
+            if (error) {
+                NSLog(@"delete file error.");
+            }
+        }
+        [[NSFileManager defaultManager] moveItemAtPath:path toPath:oldFile error:&error];
+        if (error) {
+            NSLog(@"move to file error, override.");
+        }
+        handle = [NSFileHandle fileHandleForUpdatingAtPath:path];
+        if (!handle) {
+            NSString *message = [NSString stringWithFormat:@"Could not write to file: \"%@\"", path];
+            @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
+        }
+    }
     
     //设置全局配置，当调用日志函数时会用得到
     Logger *logger = [self getInstance];
@@ -80,6 +106,9 @@
     logger.fileSecretKey = config.password;
     logger.cacheSize = config.cacheSize;
     logger.iv = config.iv;
+    
+    [handle seekToEndOfFile];
+    [handle writeData:[[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding]];
     
     if (config.isGzip) {
         if (deflateInit2(&logger->_zStream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS | GZIP_ENCODING,
@@ -244,9 +273,9 @@
             NSMutableData *mData = [[writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv] mutableCopy];
             char buffer[kCCBlockSizeAES128] = {0};
             size_t dataOutMoved = 0;
-
+            
             if (mData && kCCSuccess == CCCryptorFinal(cryptor, buffer, sizeof(buffer),
-                                             &dataOutMoved)) {
+                                                      &dataOutMoved)) {
                 NSData *data = [NSData dataWithBytes:buffer length:dataOutMoved];
                 [mData appendData:data];
                 writeData = mData;
@@ -300,7 +329,7 @@
 + (NSArray <NSString *>*)decryptFromData:(NSData *)allData config:(LoggerConfig *)config {
     NSAssert(allData != nil, @"allData could not be null");
     NSAssert(config.header != nil, @"header could not be null");
-
+    
     NSMutableArray <NSString *>*results = [NSMutableArray array];
     NSInteger dataBegin = -1;
     NSData *headData = [config.header dataUsingEncoding:NSUTF8StringEncoding];
@@ -332,7 +361,7 @@
 + (NSData *)encryptData:(NSArray <NSString *>*)allLog config:(LoggerConfig *)config {
     NSAssert(allLog != nil, @"allData could not be null");
     NSAssert(config.header != nil, @"header could not be null");
-
+    
     NSData *headData = [config.header dataUsingEncoding:NSUTF8StringEncoding];
     NSMutableData *mData = [NSMutableData data];
     for (NSString *log in allLog) {
