@@ -22,7 +22,9 @@
 @property (strong, nonatomic) NSString *fileSecretKey;
 @property (assign, nonatomic) CCCryptorRef fileCryptor;
 @property (strong, nonatomic) NSMutableData *fileCache;
-@property (strong, nonatomic) NSLock *fileLock;
+@property (strong, nonatomic) dispatch_queue_t fileQueue;
+
+@property (weak, nonatomic) id <LoggerDelegate>delegate;
 
 @end
 
@@ -34,8 +36,12 @@
     dispatch_once(&onceToken, ^{
         logger = [[Logger alloc] init];
         logger.fileCache = [NSMutableData data];
-        logger.fileLock = [[NSLock alloc] init];
         logger.level = LoggerLevelError;
+        char *queueName = "";
+#if DEBUG
+        queueName = "fileQueue";
+#endif
+        logger.fileQueue = dispatch_queue_create(queueName, nil);
     });
     return logger;
 }
@@ -70,11 +76,11 @@
         @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
     }
     
-    //读取之前的文件，读不出就有可能是写了一半，或者是解压的错误
+    //读取之前的文件，读不出就有可能是写了一半强退了
     NSData *data = [handle readDataToEndOfFile];
     NSArray *arr = [self decryptFromData:data config:config];
     if (data.length > 0 && arr.count == 0) {
-        NSLog(@"could not read the file, recreating...");
+        NSLog(@"Could not read the file, recreating...");
         [handle closeFile];
         NSString *oldFile = [path stringByAppendingString:@".old"];
         NSError *error = nil;
@@ -83,20 +89,26 @@
         if ([[NSFileManager defaultManager] fileExistsAtPath:oldFile]) {
             [[NSFileManager defaultManager] removeItemAtPath:oldFile error:&error];
             if (error) {
-                NSLog(@"delete file error.");
+                NSString *message = @"delete file error.";
+                @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
             }
         }
+        
         [[NSFileManager defaultManager] moveItemAtPath:path toPath:oldFile error:&error];
         if (error) {
-            NSLog(@"move to file error, override.");
+            NSString *message = @"move to file error, override.";
+            @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
+        } else {
+            [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
         }
+    
         handle = [NSFileHandle fileHandleForUpdatingAtPath:path];
         if (!handle) {
             NSString *message = [NSString stringWithFormat:@"Could not write to file: \"%@\"", path];
             @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
         }
     }
-    
+
     //设置全局配置，当调用日志函数时会用得到
     Logger *logger = [self getInstance];
     NSAssert(logger != nil, @"logger could not be null");
@@ -109,7 +121,7 @@
     
     [handle seekToEndOfFile];
     [handle writeData:[[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding]];
-    
+
     if (config.isGzip) {
         if (deflateInit2(&logger->_zStream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS | GZIP_ENCODING,
                          8, Z_DEFAULT_STRATEGY) < 0) {
@@ -133,6 +145,13 @@
     }
 }
 
++ (void)initWithDelegate:(id<LoggerDelegate>)delegate {
+    //设置全局配置，当调用日志函数时会用得到
+    Logger *logger = [self getInstance];
+    NSAssert(logger != nil, @"logger could not be null");
+    logger.delegate = delegate;
+}
+
 + (void)outputToFile:(NSMutableString *)string {
     //最后要加换行符
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
@@ -145,26 +164,28 @@
     data = [string dataUsingEncoding:NSUTF8StringEncoding];
     
     //用队列写
-    [[self getInstance].fileLock lock];
-    NSMutableData *fileCache = [self getInstance].fileCache;
-    if (data != nil) {
-        [fileCache appendData:data];
-        if (fileCache.length > logger.cacheSize) {
-            //先压缩后加密
-            NSData *writeData = fileCache;
-            if (logger.useZip) {
-                writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
+    void (^fileHandler)(void) = ^{
+        NSMutableData *fileCache = [self getInstance].fileCache;
+        if (data != nil) {
+            [fileCache appendData:data];
+            if (fileCache.length > logger.cacheSize) {
+                //先压缩后加密
+                NSData *writeData = fileCache;
+                if (logger.useZip) {
+                    writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
+                }
+                if (logger.fileSecretKey.length > 0) {
+                    writeData = [writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv];
+                }
+                [[self getInstance].fileHandle writeData:writeData];
+                
+                //每写一次以后就清缓存
+                [self getInstance].fileCache = [NSMutableData data];
             }
-            if (logger.fileSecretKey.length > 0) {
-                writeData = [writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv];
-            }
-            [[self getInstance].fileHandle writeData:writeData];
-            
-            //每写一次以后就清缓存
-            [self getInstance].fileCache = [NSMutableData data];
         }
-    }
-    [[self getInstance].fileLock unlock];
+    };
+    
+    dispatch_async([self getInstance].fileQueue, fileHandler);
 }
 
 #pragma mark -
@@ -174,11 +195,13 @@
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelInfo;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelInfo && [self getInstance].fileHandle != nil;
     
-    if (isOutputToConsole || isOutputToFile) {
+    id<LoggerDelegate> delegate = [self getInstance].delegate;
+    if (isOutputToConsole || isOutputToFile || delegate) {
         va_list args;
         va_start(args, format);
+        NSString *noPrefixStr = [[NSString alloc] initWithFormat:format arguments:args];
         NSMutableString *string = [NSMutableString stringWithString:@"INFO: "];
-        [string appendString:[[NSString alloc] initWithFormat:format arguments:args]];
+        [string appendString:noPrefixStr];
         va_end(args);
         
         if (isOutputToConsole) {
@@ -186,6 +209,12 @@
         }
         if (isOutputToFile) {
             [self outputToFile:string];
+        }
+        if ([delegate respondsToSelector:@selector(logXPCInfo:)]) {
+            LoggerXPCInfo *xpcInfo = [[LoggerXPCInfo alloc] init];
+            xpcInfo.destLog = noPrefixStr;
+            xpcInfo.level = LoggerLevelInfo;
+            [delegate logXPCInfo:xpcInfo];
         }
     }
 }
@@ -195,11 +224,14 @@
     
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelDebug;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelDebug && [self getInstance].fileHandle != nil;
-    if (isOutputToConsole || isOutputToFile) {
+    
+    id<LoggerDelegate> delegate = [self getInstance].delegate;
+    if (isOutputToConsole || isOutputToFile || delegate) {
         va_list args;
         va_start(args, format);
+        NSString *noPrefixStr = [[NSString alloc] initWithFormat:format arguments:args];
         NSMutableString *string = [NSMutableString stringWithString:@"DEBUG: "];
-        [string appendString:[[NSString alloc] initWithFormat:format arguments:args]];
+        [string appendString:noPrefixStr];
         va_end(args);
         
         if (isOutputToConsole) {
@@ -207,6 +239,12 @@
         }
         if (isOutputToFile) {
             [self outputToFile:string];
+        }
+        if ([delegate respondsToSelector:@selector(logXPCInfo:)]) {
+            LoggerXPCInfo *xpcInfo = [[LoggerXPCInfo alloc] init];
+            xpcInfo.destLog = noPrefixStr;
+            xpcInfo.level = LoggerLevelDebug;
+            [delegate logXPCInfo:xpcInfo];
         }
     }
 }
@@ -217,11 +255,13 @@
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelWarn;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelWarn && [self getInstance].fileHandle != nil;
     
-    if (isOutputToConsole || isOutputToFile) {
+    id<LoggerDelegate> delegate = [self getInstance].delegate;
+    if (isOutputToConsole || isOutputToFile || delegate) {
         va_list args;
         va_start(args, format);
+        NSString *noPrefixStr = [[NSString alloc] initWithFormat:format arguments:args];
         NSMutableString *string = [NSMutableString stringWithString:@"WARN: "];
-        [string appendString:[[NSString alloc] initWithFormat:format arguments:args]];
+        [string appendString:noPrefixStr];
         va_end(args);
         
         if (isOutputToConsole) {
@@ -229,6 +269,12 @@
         }
         if (isOutputToFile) {
             [self outputToFile:string];
+        }
+        if ([delegate respondsToSelector:@selector(logXPCInfo:)]) {
+            LoggerXPCInfo *xpcInfo = [[LoggerXPCInfo alloc] init];
+            xpcInfo.destLog = noPrefixStr;
+            xpcInfo.level = LoggerLevelWarn;
+            [delegate logXPCInfo:xpcInfo];
         }
     }
 }
@@ -239,11 +285,13 @@
     BOOL isOutputToConsole = [self getInstance].level >= LoggerLevelError;
     BOOL isOutputToFile = [self getInstance].fileLevel >= LoggerLevelError && [self getInstance].fileHandle != nil;
     
-    if (isOutputToConsole || isOutputToFile) {
+    id<LoggerDelegate> delegate = [self getInstance].delegate;
+    if (isOutputToConsole || isOutputToFile || delegate) {
         va_list args;
         va_start(args, format);
+        NSString *noPrefixStr = [[NSString alloc] initWithFormat:format arguments:args];
         NSMutableString *string = [NSMutableString stringWithString:@"ERROR: "];
-        [string appendString:[[NSString alloc] initWithFormat:format arguments:args]];
+        [string appendString:noPrefixStr];
         va_end(args);
         
         if (isOutputToConsole) {
@@ -251,6 +299,12 @@
         }
         if (isOutputToFile) {
             [self outputToFile:string];
+        }
+        if ([delegate respondsToSelector:@selector(logXPCInfo:)]) {
+            LoggerXPCInfo *xpcInfo = [[LoggerXPCInfo alloc] init];
+            xpcInfo.destLog = noPrefixStr;
+            xpcInfo.level = LoggerLevelError;
+            [delegate logXPCInfo:xpcInfo];
         }
     }
 }
@@ -260,41 +314,42 @@
     Logger *logger = [self getInstance];
     NSFileHandle *handle = [self getInstance].fileHandle;
     if (handle) {
-        [[self getInstance].fileLock lock];
-        NSMutableData *fileCache = [self getInstance].fileCache;
-        
-        //先压缩后加密
-        NSData *writeData = fileCache;
-        if (logger.useZip) {
-            writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
-        }
-        CCCryptorRef cryptor = [self getInstance].fileCryptor;
-        if (cryptor) {
-            NSMutableData *mData = [[writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv] mutableCopy];
-            char buffer[kCCBlockSizeAES128] = {0};
-            size_t dataOutMoved = 0;
+        void (^fileHandler)(void) = ^{
+            NSMutableData *fileCache = [self getInstance].fileCache;
             
-            if (mData && kCCSuccess == CCCryptorFinal(cryptor, buffer, sizeof(buffer),
-                                                      &dataOutMoved)) {
-                NSData *data = [NSData dataWithBytes:buffer length:dataOutMoved];
-                [mData appendData:data];
-                writeData = mData;
+            //先压缩后加密
+            NSData *writeData = fileCache;
+            if (logger.useZip) {
+                writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
             }
-            CCCryptorRelease(cryptor);
-            [self getInstance].fileCryptor = nil;
-        }
-        
-        [handle writeData:writeData];
-        [handle closeFile];
-        [self getInstance].fileHandle = nil;
-        
-        //最后写肯定得清缓存
-        [self getInstance].fileCache = [NSMutableData data];
-        [[self getInstance].fileLock unlock];
-    }
-    if (logger.useZip) {
-        deflateEnd(&logger->_zStream);
-        logger.useZip = NO;
+            CCCryptorRef cryptor = [self getInstance].fileCryptor;
+            if (cryptor) {
+                NSMutableData *mData = [[writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv] mutableCopy];
+                char buffer[kCCBlockSizeAES128] = {0};
+                size_t dataOutMoved = 0;
+                
+                if (mData && kCCSuccess == CCCryptorFinal(cryptor, buffer, sizeof(buffer),
+                                                          &dataOutMoved)) {
+                    NSData *data = [NSData dataWithBytes:buffer length:dataOutMoved];
+                    [mData appendData:data];
+                    writeData = mData;
+                }
+                CCCryptorRelease(cryptor);
+                [self getInstance].fileCryptor = nil;
+            }
+            
+            [handle writeData:writeData];
+            [handle closeFile];
+            [self getInstance].fileHandle = nil;
+            
+            //最后写肯定得清缓存
+            [self getInstance].fileCache = [NSMutableData data];
+            if (logger.useZip) {
+                deflateEnd(&logger->_zStream);
+                logger.useZip = NO;
+            }
+        };
+        dispatch_sync([self getInstance].fileQueue, fileHandler);
     }
 }
 

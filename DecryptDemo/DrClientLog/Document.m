@@ -31,6 +31,7 @@
     // Insert code here to write your document to data of the specified type. If outError != NULL, ensure that you create and set an appropriate error if you return nil.
     // Alternatively, you could remove this method and override -fileWrapperOfType:error:, -writeToURL:ofType:error:, or -writeToURL:ofType:forSaveOperation:originalContentsURL:error: instead.
     @try {
+        //暂不支持在输入框中修改后保存
         Pref *pref = [CommonDataManager defaultManager].pref;
         NSString *password = pref.password;
         NSData *iv = pref.iv;

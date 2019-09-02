@@ -7,8 +7,19 @@
 
 #import <Foundation/Foundation.h>
 #import "LoggerConfig.h"
+#import "LoggerXPCInfo.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+#define USE_LOGGER  1
+
+@protocol LoggerDelegate <NSObject>
+@optional
+
+//通过自定义方式输出
+- (void)logXPCInfo:(LoggerXPCInfo *)info;
+
+@end
 
 @interface Logger : NSObject
 
@@ -20,6 +31,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 //初始化文件之前，先设置好参数再初始化
 + (void)initFilePath:(NSString *)path config:(LoggerConfig *)config;
++ (void)initWithDelegate:(id<LoggerDelegate>)delegate;
 
 + (void)info:(NSString *)format, ...;
 + (void)debug:(NSString *)format, ...;
