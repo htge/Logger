@@ -15,7 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface NSData (ZLIB)
 
 - (NSData *)deflate;
-- (NSData *)deflateWithStream:(z_stream *)pstrm chunk:(int)chunk;
+- (NSData *)deflateWithStream:(z_stream *)pstrm;
+- (NSData *)closeStream:(z_stream *)pstrm;
 - (NSData *)inflate;
 
 @end

@@ -9,6 +9,8 @@
 #import "NSData+AES.h"
 #import "NSData+Zlib.h"
 
+#define MAX_FILE_SIZE       16777216
+
 @interface Logger()
 
 @property (assign, nonatomic) NSString *logHeader;
@@ -42,6 +44,7 @@
         queueName = "fileQueue";
 #endif
         logger.fileQueue = dispatch_queue_create(queueName, nil);
+        memset(&logger->_zStream, 0, sizeof(z_stream));
     });
     return logger;
 }
@@ -62,7 +65,14 @@
     NSAssert(config.header != nil, @"header could not be null");
     NSAssert(config.cacheSize > 0 && config.cacheSize < 131072, @"Cache size out of range");
     
+    int ret;
     BOOL isDirectory;
+
+    //文件太大，就要重命名为.old。除非有人打开这个app长时间不关的，那就有可能累计特别大的日志
+    if ([self fileSizeTooLarge:path]) {
+        [self moveToOldFile:path];
+    }
+    
     if (![[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory]) {
         [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
     } else if (isDirectory) {
@@ -123,8 +133,9 @@
     [handle writeData:[[self getInstance].logHeader dataUsingEncoding:NSUTF8StringEncoding]];
 
     if (config.isGzip) {
-        if (deflateInit2(&logger->_zStream, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS | GZIP_ENCODING,
-                         8, Z_DEFAULT_STRATEGY) < 0) {
+        ret = deflateInit2(&logger->_zStream, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                           MAX_WBITS + GZIP_ENCODING, 8, Z_DEFAULT_STRATEGY);
+        if (ret != Z_OK) {
             NSString *message = @"Could not init zlib";
             @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
         }
@@ -142,6 +153,28 @@
                                           config.iv.bytes, &cryptor)) {
             [self getInstance].fileCryptor = cryptor;
         }
+    }
+}
+
++ (BOOL)fileSizeTooLarge:(NSString *)path {
+    NSError *attributesError;
+    NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:&attributesError];
+    NSNumber *fileSizeNumber = [fileAttributes objectForKey:NSFileSize];
+    return [fileSizeNumber longLongValue] > MAX_FILE_SIZE;
+}
+
++ (void)moveToOldFile:(NSString *)path {
+    NSError *error;
+    NSString *toPath = [path stringByAppendingString:@".old"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:toPath]) {
+        if (![[NSFileManager defaultManager] removeItemAtPath:toPath error:&error]) {
+            NSString *message = [NSString stringWithFormat:@"Could not delete the file: \"%@\"", toPath];
+            @throw [NSException exceptionWithName:NSStringFromClass(self.class) reason:message userInfo:nil];
+        }
+    }
+    
+    if (![[NSFileManager defaultManager] moveItemAtPath:path toPath:toPath error:&error]) {
+        [Logger error:@"move item error: %@->%@", path, toPath];
     }
 }
 
@@ -172,7 +205,7 @@
                 //先压缩后加密
                 NSData *writeData = fileCache;
                 if (logger.useZip) {
-                    writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
+                    writeData = [writeData deflateWithStream:&logger->_zStream];
                 }
                 if (logger.fileSecretKey.length > 0) {
                     writeData = [writeData updateEncrypt256:logger.fileCryptor password:logger.fileSecretKey iv:logger.iv];
@@ -320,7 +353,8 @@
             //先压缩后加密
             NSData *writeData = fileCache;
             if (logger.useZip) {
-                writeData = [writeData deflateWithStream:&logger->_zStream chunk:(int)logger.cacheSize];
+                writeData = [writeData closeStream:&logger->_zStream];
+                logger.useZip = NO;
             }
             CCCryptorRef cryptor = [self getInstance].fileCryptor;
             if (cryptor) {
@@ -344,10 +378,6 @@
             
             //最后写肯定得清缓存
             [self getInstance].fileCache = [NSMutableData data];
-            if (logger.useZip) {
-                deflateEnd(&logger->_zStream);
-                logger.useZip = NO;
-            }
         };
         dispatch_sync([self getInstance].fileQueue, fileHandler);
     }
@@ -373,7 +403,7 @@
         if (decData) {
             str = [[NSString alloc] initWithData:decData encoding:NSUTF8StringEncoding];
             if (str == nil) {
-                NSLog(@"decryptData无法处理错误的字符串，退出");
+                NSLog(@"decryptData无法处理错误的字符串");
                 return @"";
             }
         }

@@ -6,7 +6,6 @@
 //
 
 #import <Foundation/Foundation.h>
-#import "LoggerConfig.h"
 #import "LoggerXPCInfo.h"
 
 NS_ASSUME_NONNULL_BEGIN

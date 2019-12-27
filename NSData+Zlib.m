@@ -7,146 +7,92 @@
 
 #import "NSData+Zlib.h"
 
+#define BUFLEN 16384
+
 @implementation NSData(ZLIB)
 
 - (NSData *)deflate {
-    NSMutableData *mdata = [NSMutableData data];
     z_stream strm = { 0 };
-    //区块越大，压缩率越高。16K以上则差距小得多
-    int chunk = 65536, start = 0, len = 0;
-    char *chunk_in = NULL, *chunk_out = NULL;
-    if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED, MAX_WBITS | GZIP_ENCODING,
-                     8, Z_DEFAULT_STRATEGY) < 0) {
+    if (deflateInit2(&strm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+                     MAX_WBITS + GZIP_ENCODING, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
         return nil;
     }
+    return [self closeStream:&strm];
+}
+
+- (NSData *)deflateWithStream:(z_stream *)pstrm {
+    assert(pstrm != nil);
     
-    chunk_in = malloc(chunk);
-    if (!chunk_in) {
-        return nil;
-    }
-    chunk_out = malloc(chunk);
-    if (!chunk_out) {
-        free(chunk_in);
-        return nil;
-    }
-    start = 0;
-    len = (int)(self.length > chunk ? chunk : self.length);
-    while (len > 0) {
-        int have = 0, remain = 0;
-        @try {
-            [self getBytes:chunk_in range:NSMakeRange(start, len)];
-        } @catch (NSException *e) {
-            NSLog(@"deflateWithStream cause exception: %@", e);
-            break;
-        }
+    NSMutableData *mdata = [NSMutableData data];
+    unsigned char chunk_out[BUFLEN];
         
-        strm.next_in = (Bytef *)chunk_in;
-        strm.avail_in = len;
-        strm.avail_out = chunk;
-        strm.next_out = (Bytef *)chunk_out;
-        if (deflate(&strm, Z_BLOCK) < 0) {
-            break;
-        }
-        
-        have = chunk - strm.avail_out;
-        [mdata appendBytes:chunk_out length:have];
-        
-        start += len;
-        remain = (int)(self.length - start);
-        len = remain > chunk ? chunk : remain;
-    }
-    free(chunk_in);
-    free(chunk_out);
-    deflateEnd(&strm);
+    pstrm->next_in = (void*)self.bytes;
+    pstrm->avail_in = (uint)self.length;
+    do {
+        pstrm->next_out = chunk_out;
+        pstrm->avail_out = BUFLEN;
+        (void)deflate(pstrm, Z_NO_FLUSH);
+        [mdata appendBytes:chunk_out length:BUFLEN - pstrm->avail_out];
+    } while (pstrm->avail_out == 0);
     return mdata;
 }
 
-- (NSData *)deflateWithStream:(z_stream *)pstrm chunk:(int)chunk {
-    assert(chunk >= 128 && chunk < 262144);
-    
+- (NSData *)closeStream:(z_stream *)pstrm {
+    assert(pstrm != nil);
+
     NSMutableData *mdata = [NSMutableData data];
-    int start = 0;
-    int len = (int)(self.length > chunk ? chunk : self.length);
-    char *chunk_in = malloc(chunk), *chunk_out = NULL;
-    if (!chunk_in) {
-        return nil;
-    }
-    chunk_out = malloc(chunk);
-    if (!chunk_out) {
-        free(chunk_in);
-        return nil;
-    }
-    while (len > 0) {
-        int have = 0, remain = 0;
-        @try {
-            [self getBytes:chunk_in range:NSMakeRange(start, len)];
-        } @catch (NSException *e) {
-            NSLog(@"deflateWithStream cause exception: %@", e);
-            break;
-        }
+    unsigned char chunk_out[BUFLEN];
         
-        pstrm->next_in = (Bytef *)chunk_in;
-        pstrm->avail_in = len;
-        pstrm->avail_out = chunk;
-        pstrm->next_out = (Bytef *)chunk_out;
-        if (deflate(pstrm, Z_BLOCK) < 0) {
-            break;
-        }
-        
-        have = chunk - pstrm->avail_out;
-        [mdata appendBytes:chunk_out length:have];
-        
-        start += len;
-        remain = (int)(self.length - start);
-        len = remain > chunk ? chunk : remain;
-    }
+    pstrm->next_in = (void*)self.bytes;
+    pstrm->avail_in = (uint)self.length;
+    do {
+        pstrm->next_out = chunk_out;
+        pstrm->avail_out = BUFLEN;
+        (void)deflate(pstrm, Z_FINISH);
+        [mdata appendBytes:chunk_out length:BUFLEN - pstrm->avail_out];
+    } while (pstrm->avail_out == 0);
+    deflateEnd(pstrm);
     return mdata;
 }
 
 - (NSData *)inflate {
     NSMutableData *mdata = [NSMutableData data];
     z_stream strm = { 0 };
-    int chunk = 65536, start = 0, len = 0;
-    char *chunk_in = NULL, *chunk_out = NULL;
+    char chunk_out[BUFLEN];
+    int err, outLength;
     
-    if (inflateInit2(&strm, MAX_WBITS | GZIP_ENCODING) < 0) return nil;
-    chunk_in = malloc(chunk);
-    if (!chunk_in) return nil;
-    chunk_out = malloc(chunk);
-    if (!chunk_out) {
-        free(chunk_in);
-        return nil;
-    }
-    len = (int)(self.length > chunk ? chunk : self.length);
-    while (len > 0) {
-        int have = 0, remain = 0;
-        
-        @try {
-            [self getBytes:chunk_in range:NSMakeRange(start, len)];
-        } @catch (NSException *e) {
-            NSLog(@"inflate cause exception: %@", e);
-            break;
-        }
+    strm.next_in = 0;
+    strm.avail_in = Z_NULL;
 
-        strm.next_in = (Bytef *)chunk_in;
-        strm.avail_in = len;
-        strm.avail_out = chunk;
-        strm.next_out = (Bytef *)chunk_out;
-        if (inflate(&strm, Z_NO_FLUSH) < 0) {
-            NSLog(@"inflate_err: %i", errno);
+    if (inflateInit2(&strm, MAX_WBITS + GZIP_ENCODING) != Z_OK) return nil;
+
+    strm.next_in = (void *)self.bytes;
+    strm.avail_in = (int)self.length;
+    
+    do {
+        strm.next_out = (void *)chunk_out;
+        strm.avail_out = BUFLEN;
+        err = inflate(&strm, Z_NO_FLUSH);
+        if (err == Z_DATA_ERROR) {
+            NSLog(@"inflate data error");
             break;
         }
         
-        have = chunk - strm.avail_out;
-        [mdata appendBytes:chunk_out length:have];
-        
-        start += (len-strm.avail_in);
-        remain = (int)(self.length - start);
-        len = remain > chunk ? chunk : remain;
-    }
-    free(chunk_in);
-    free(chunk_out);
-    inflateEnd(&strm);
+        outLength = BUFLEN-strm.avail_out;
+        if (outLength > 0) {
+            [mdata appendBytes:chunk_out length:outLength];
+        }
+        if (err == Z_STREAM_END) {
+            inflateEnd(&strm);
+            break;
+        }
+        //兼容以前的协议
+        if (strm.avail_in == 0) {
+            NSLog(@"inflate: unexpected end of file");
+            inflateEnd(&strm);
+            break;
+        }
+    } while (strm.avail_out == 0);
     return mdata;
 }
 
